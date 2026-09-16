@@ -90,7 +90,7 @@ async function fetchOfficialXItems(screenName) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .map(post => ({
       id: post.id,
-      title: post.text?.replace(/\\s+/g, ' ').trim() || 'Neuer X-Post',
+      title: post.text?.replace(/\s+/g, ' ').trim() || 'Neuer X-Post',
       link: `https://x.com/${screenName}/status/${post.id}`,
       publishedAt: post.created_at ? new Date(post.created_at).toISOString() : new Date(0).toISOString(),
     }));
