@@ -55,9 +55,59 @@ function getXScreenName(inputUrl) {
   return screenName.replace(/^@/, '');
 }
 
+async function fetchOfficialXItems(screenName) {
+  const bearerToken = process.env.X_BEARER_TOKEN?.trim();
+  if (!bearerToken) return null;
+
+  const headers = {
+    Authorization: `Bearer ${bearerToken}`,
+    Accept: 'application/json',
+  };
+
+  const userResponse = await axios.get(
+    `https://api.x.com/2/users/by/username/${encodeURIComponent(screenName)}`,
+    { timeout: REQUEST_TIMEOUT_MS, headers }
+  );
+  const user = userResponse.data?.data;
+  if (!user?.id) {
+    throw new Error(`X-Benutzer ${screenName} wurde nicht gefunden.`);
+  }
+
+  const postsResponse = await axios.get(
+    `https://api.x.com/2/users/${user.id}/tweets`,
+    {
+      timeout: REQUEST_TIMEOUT_MS,
+      headers,
+      params: {
+        max_results: 10,
+        'tweet.fields': 'created_at',
+      },
+    }
+  );
+
+  const items = (postsResponse.data?.data || [])
+    .filter(post => post?.id)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .map(post => ({
+      id: post.id,
+      title: post.text?.replace(/\\s+/g, ' ').trim() || 'Neuer X-Post',
+      link: `https://x.com/${screenName}/status/${post.id}`,
+      publishedAt: post.created_at ? new Date(post.created_at).toISOString() : new Date(0).toISOString(),
+    }));
+
+  if (items.length === 0) {
+    throw new Error(`Im X-Profil ${screenName} wurden keine Posts gefunden.`);
+  }
+
+  return { provider: 'x', items };
+}
+
 async function fetchXItems(inputUrl) {
   const screenName = getXScreenName(inputUrl);
   if (!screenName) return null;
+
+  const officialResult = await fetchOfficialXItems(screenName);
+  if (officialResult) return officialResult;
 
   const response = await axios.get(
     `https://syndication.twitter.com/srv/timeline-profile/screen-name/${encodeURIComponent(screenName)}`,
