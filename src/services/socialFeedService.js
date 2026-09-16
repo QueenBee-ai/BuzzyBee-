@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from './utils/logger.js';
+import { logger } from '../utils/logger.js';
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15 * 1000;
