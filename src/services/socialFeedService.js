@@ -41,6 +41,82 @@ function firstMatch(text, expressions) {
   return null;
 }
 
+function getXScreenName(inputUrl) {
+  const parsed = new URL(inputUrl);
+  if (!['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'].includes(parsed.hostname)) {
+    return null;
+  }
+
+  const screenName = parsed.pathname.split('/').filter(Boolean)[0];
+  if (!screenName || ['home', 'explore', 'notifications', 'messages', 'search', 'i'].includes(screenName.toLowerCase())) {
+    throw new Error('Bitte nutze den öffentlichen X-Profillink, zum Beispiel https://x.com/VoidRabbit911.');
+  }
+
+  return screenName.replace(/^@/, '');
+}
+
+async function fetchXItems(inputUrl) {
+  const screenName = getXScreenName(inputUrl);
+  if (!screenName) return null;
+
+  const response = await axios.get(
+    `https://syndication.twitter.com/srv/timeline-profile/screen-name/${encodeURIComponent(screenName)}`,
+    {
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'Mozilla/5.0 (compatible; BuzzyBee/1.0; +social-feed)',
+      },
+    }
+  );
+
+  const match = response.data.match(
+    /<script id="__NEXT_DATA__" type="application\/json">([\\s\\S]*?)<\/script>/
+  );
+  if (!match) {
+    throw new Error('X hat keine öffentlichen Profildaten geliefert. Das Profil muss öffentlich sein.');
+  }
+
+  let nextData;
+  try {
+    nextData = JSON.parse(match[1]);
+  } catch {
+    throw new Error('Die X-Profildaten konnten nicht gelesen werden.');
+  }
+
+  const posts = [];
+  const walk = value => {
+    if (!value || typeof value !== 'object') return;
+    if (
+      typeof value.id_str === 'string'
+      && typeof value.text === 'string'
+      && value.user?.screen_name
+      && value.created_at
+    ) {
+      posts.push(value);
+    }
+
+    for (const child of Object.values(value)) walk(child);
+  };
+  walk(nextData);
+
+  const items = [...new Map(posts.map(post => [post.id_str, post])).values()]
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-10)
+    .map(post => ({
+      id: post.id_str,
+      title: post.text.replace(/\\s+/g, ' ').trim() || 'Neuer X-Post',
+      link: `https://x.com/${post.user.screen_name}/status/${post.id_str}`,
+      publishedAt: new Date(post.created_at).toISOString(),
+    }));
+
+  if (items.length === 0) {
+    throw new Error('Im öffentlichen X-Profil wurden keine Posts gefunden.');
+  }
+
+  return { provider: 'x', items };
+}
+
 async function resolveFeedUrl(inputUrl) {
   const parsed = new URL(inputUrl);
 
@@ -122,6 +198,9 @@ function parseFeed(xml) {
 }
 
 async function fetchLatestItems(url) {
+  const xResult = await fetchXItems(url);
+  if (xResult) return xResult;
+
   const feedUrl = await resolveFeedUrl(url);
   const response = await axios.get(feedUrl, {
     timeout: REQUEST_TIMEOUT_MS,
@@ -129,7 +208,7 @@ async function fetchLatestItems(url) {
   });
   const items = parseFeed(response.data);
   if (items.length === 0) throw new Error('Im Feed wurden keine Uploads gefunden.');
-  return { feedUrl, items };
+  return { provider: 'rss', feedUrl, items };
 }
 
 export async function getSocialFeeds(client, guildId) {
@@ -162,12 +241,14 @@ export async function saveSocialFeed(client, guildId, input) {
 }
 
 async function checkFeed(client, feed) {
-  const { items } = await fetchLatestItems(feed.url);
+  const { items, provider } = await fetchLatestItems(feed.url);
   const newest = items[items.length - 1];
 
   if (!feed.lastItemId) {
     feed.lastItemId = newest.id;
-    return { feed, changed: true };
+    if (provider !== 'x' || Date.now() - new Date(newest.publishedAt).getTime() > 15 * 60 * 1000) {
+      return { feed, changed: true };
+    }
   }
 
   const lastIndex = items.findIndex(item => item.id === feed.lastItemId);
@@ -179,7 +260,7 @@ async function checkFeed(client, feed) {
   const validItems = newItems.filter(item => item.id !== feed.lastItemId).slice(-5);
   for (const item of validItems) {
     await channel.send({
-      content: `<@&${feed.roleId}>`,
+      content: `<@&${feed.roleId}>\\n${item.link}`,
       embeds: [{
         title: item.title.slice(0, 256),
         url: item.link,
