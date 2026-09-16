@@ -260,7 +260,7 @@ async function checkFeed(client, feed) {
   const validItems = newItems.filter(item => item.id !== feed.lastItemId).slice(-5);
   for (const item of validItems) {
     await channel.send({
-      content: `<@&${feed.roleId}>\\n${item.link}`,
+      content: `<@&${feed.roleId}>\n${item.link}`,
       embeds: [{
         title: item.title.slice(0, 256),
         url: item.link,
