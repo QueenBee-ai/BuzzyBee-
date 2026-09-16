@@ -107,8 +107,14 @@ async function fetchXItems(inputUrl) {
   const screenName = getXScreenName(inputUrl);
   if (!screenName) return null;
 
-  const officialResult = await fetchOfficialXItems(screenName);
-  if (officialResult) return officialResult;
+  try {
+    const officialResult = await fetchOfficialXItems(screenName);
+    if (officialResult) return officialResult;
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status !== 402 && status !== 403) throw error;
+    logger.warn(`X API ${status} für ${screenName}; nutze öffentliche X-Schnittstelle als Fallback.`);
+  }
 
   const response = await axios.get(
     `https://syndication.twitter.com/srv/timeline-profile/screen-name/${encodeURIComponent(screenName)}`,
