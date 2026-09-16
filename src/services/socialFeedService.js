@@ -90,6 +90,7 @@ async function fetchOfficialXItems(screenName) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .map(post => ({
       id: post.id,
+      authorName: screenName,
       title: post.text?.replace(/\s+/g, ' ').trim() || 'Neuer X-Post',
       link: `https://x.com/${screenName}/status/${post.id}`,
       publishedAt: post.created_at ? new Date(post.created_at).toISOString() : new Date(0).toISOString(),
@@ -155,6 +156,7 @@ async function fetchXItems(inputUrl) {
     .slice(-10)
     .map(post => ({
       id: post.id_str,
+      authorName: post.user.screen_name,
       title: post.text.replace(/\s+/g, ' ').trim() || 'Neuer X-Post',
       link: `https://x.com/${post.user.screen_name}/status/${post.id_str}`,
       publishedAt: new Date(post.created_at).toISOString(),
@@ -310,7 +312,7 @@ async function checkFeed(client, feed) {
   const validItems = newItems.filter(item => item.id !== feed.lastItemId).slice(-5);
   for (const item of validItems) {
     await channel.send({
-      content: `<@&${feed.roleId}>\n${item.link}`,
+      content: `<@&${feed.roleId}>\n📢 **${item.authorName || 'This account'} published a new post!**\n${item.link}`,
       embeds: [{
         title: item.title.slice(0, 256),
         url: item.link,
