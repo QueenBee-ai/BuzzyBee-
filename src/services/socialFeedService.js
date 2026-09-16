@@ -71,7 +71,7 @@ async function fetchXItems(inputUrl) {
   );
 
   const match = response.data.match(
-    /<script id="__NEXT_DATA__" type="application\/json">([\\s\\S]*?)<\/script>/
+    /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/
   );
   if (!match) {
     throw new Error('X hat keine öffentlichen Profildaten geliefert. Das Profil muss öffentlich sein.');
@@ -105,7 +105,7 @@ async function fetchXItems(inputUrl) {
     .slice(-10)
     .map(post => ({
       id: post.id_str,
-      title: post.text.replace(/\\s+/g, ' ').trim() || 'Neuer X-Post',
+      title: post.text.replace(/\s+/g, ' ').trim() || 'Neuer X-Post',
       link: `https://x.com/${post.user.screen_name}/status/${post.id_str}`,
       publishedAt: new Date(post.created_at).toISOString(),
     }));
