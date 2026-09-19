@@ -231,8 +231,21 @@ function prepareCommandsForRegistration(commands) {
     }
 
     logger.warn(`Command count (${commands.length}) exceeds Discord limit (${MAX_COMMANDS}), truncating...`);
-    const truncated = commands.slice(0, MAX_COMMANDS);
+
+    // Keep newly added administrative commands visible when the project reaches Discord's limit.
+    const priorityNames = new Set(['sendmsg']);
+    const prioritized = commands.filter(command => priorityNames.has(command.name));
+    const remaining = commands.filter(command => !priorityNames.has(command.name));
+    const truncated = [...prioritized, ...remaining].slice(0, MAX_COMMANDS);
+    const omitted = commands
+        .filter(command => !truncated.some(registered => registered.name === command.name))
+        .map(command => command.name);
+
     logger.info(`Truncated to ${truncated.length} commands for registration`);
+    if (omitted.length > 0) {
+        logger.warn(`Commands omitted due to Discord limit: ${omitted.join(', ')}`);
+    }
+
     return truncated;
 }
 
